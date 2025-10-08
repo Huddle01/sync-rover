@@ -6,7 +6,7 @@ The core real-time functionality is powered by the **Huddle01 SDK**, which enabl
 
 -----
 
-## \#\# Tech Stack
+## Tech Stack
 
   * **Runtime**: Bun
   * **Framework**: Next.js
@@ -18,16 +18,16 @@ The core real-time functionality is powered by the **Huddle01 SDK**, which enabl
 
 -----
 
-## \#\# Getting Started
+## Getting Started
 
-### \#\#\# 1. Clone the Repository
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/Huddle01/sync-rover.git
 cd sync-rover
 ```
 
-### \#\#\# 2. Set Up Environment Variables
+### 2. Set Up Environment Variables
 
 Get your **Project ID** and **API Key** from [huddle01.dev](https://huddle01.dev). Then, create a `.env` file in the project root and add your credentials.
 
@@ -38,7 +38,7 @@ NEXT_PUBLIC_PROJECT_ID=YOUR_PROJECT_ID
 API_KEY=YOUR_API_KEY
 ```
 
-### \#\#\# 3. Install and Run
+### 3. Install and Run
 
 ```bash
 # Install dependencies
@@ -52,6 +52,6 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to see the r
 
 -----
 
-## \#\# Learn More
+## Learn More
 
 To learn more about the real-time capabilities used in this project, check out the [Huddle01 Documentation](https://docs.huddle01.com/docs).
