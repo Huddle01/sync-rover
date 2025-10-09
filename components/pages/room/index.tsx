@@ -6,7 +6,6 @@ import {
   useRoom,
   useDataMessage,
   useLocalPeer,
-  useLocalVideo,
 } from "@huddle01/react/hooks";
 import { getAccessToken } from "@/lib/actions";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -22,6 +21,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import Image from "next/image";
+import { Role } from "@huddle01/server-sdk/auth";
 
 interface CarState {
   x: number;
@@ -46,9 +46,9 @@ const Room = ({ roomId }: { roomId: string }) => {
   const isHost = searchParams.get("host") === "true";
 
   const { joinRoom, leaveRoom, state } = useRoom();
-  const { peerId: localPeerId } = useLocalPeer();
+  const { peerId: localPeerId, role } = useLocalPeer();
   const { peerIds } = usePeerIds();
-  const { enableVideo } = useLocalVideo();
+  const { peerIds: hostPeerIds } = usePeerIds({ roles: [Role.HOST] });
 
   const [carState, setCarState] = useState<CarState>({
     x: 50,
@@ -66,25 +66,21 @@ const Room = ({ roomId }: { roomId: string }) => {
     },
     areLightsOn: true,
   });
-  const [hostPeerId, setHostPeerId] = useState<string | null>(
-    isHost ? localPeerId : null
-  );
+  const [hostPeerId, setHostPeerId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isRoomIdCopied, setIsRoomIdCopied] = useState(false);
   const [isHornOnCooldown, setIsHornOnCooldown] = useState(false);
+
   const viewportRef = useRef<HTMLDivElement>(null);
   const keysPressed = useRef(carState.keys);
   const carStateRef = useRef(carState);
   const animationFrameId = useRef<number>(0);
-  const hasAnnounced = useRef(false);
   const hornAudioRef = useRef<HTMLAudioElement>(null);
 
   const { sendData } = useDataMessage({
     onMessage(payload, from, label) {
       if (label === "car-update" && !isHost) {
         setCarState(JSON.parse(payload));
-      } else if (label === "host-announce" && !isHost) {
-        setHostPeerId(payload);
       } else if (label === "horn" && hornAudioRef.current) {
         hornAudioRef.current.play();
       }
@@ -92,31 +88,24 @@ const Room = ({ roomId }: { roomId: string }) => {
   });
 
   useEffect(() => {
-    if (isHost && localPeerId) setHostPeerId(localPeerId);
-  }, [isHost, localPeerId]);
+    if (isHost) {
+      setHostPeerId(localPeerId);
+    } else {
+      setHostPeerId(hostPeerIds[0] || null);
+    }
+  }, [hostPeerIds, isHost, localPeerId]);
 
   useEffect(() => {
-    getAccessToken(roomId, isHost).then((token) => joinRoom({ roomId, token }));
+    getAccessToken({ roomId, isHost }).then((token) =>
+      joinRoom({ roomId, token })
+    );
     return () => {
       leaveRoom();
     };
   }, [roomId, isHost]);
 
   useEffect(() => {
-    if (
-      isHost &&
-      state === "connected" &&
-      localPeerId &&
-      !hasAnnounced.current
-    ) {
-      sendData({ to: "*", payload: localPeerId, label: "host-announce" });
-      hasAnnounced.current = true;
-    }
-  }, [isHost, state, localPeerId, sendData, enableVideo]);
-
-  useEffect(() => {
     if (!isHost) return;
-
     const down = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if (key in keysPressed.current)
@@ -133,18 +122,14 @@ const Room = ({ roomId }: { roomId: string }) => {
         setIsHornOnCooldown(true);
         hornAudioRef.current.play();
         sendData({ to: "*", payload: "play", label: "horn" });
-        setTimeout(() => {
-          setIsHornOnCooldown(false);
-        }, 3000);
+        setTimeout(() => setIsHornOnCooldown(false), 3000);
       }
     };
-
     const up = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       if (key in keysPressed.current)
         keysPressed.current[key as keyof typeof keysPressed.current] = false;
     };
-
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
 
@@ -153,22 +138,17 @@ const Room = ({ roomId }: { roomId: string }) => {
         animationFrameId.current = requestAnimationFrame(gameLoop);
         return;
       }
-
-      // (w-16 -> 4rem -> 64px; h-28 -> 7rem -> 112px)
-      // Radius of bounding circle = sqrt((width/2)^2 + (height/2)^2) = sqrt(32^2 + 56^2) ≈ 64.5px
       const CAR_RADIUS_PX = 64.5;
-
       const viewportWidth = viewportRef.current.clientWidth;
       const viewportHeight = viewportRef.current.clientHeight;
-
       const marginX = (CAR_RADIUS_PX / viewportWidth) * 100;
       const marginY = (CAR_RADIUS_PX / viewportHeight) * 100;
 
       let { x, y, angle } = carStateRef.current;
-      const { areLightsOn } = carStateRef.current;
-      const baseSpeed = 0.8;
-      const nitroSpeed = 1.5;
-      const turnSpeed = 3.5;
+      const areLightsOn = carStateRef.current.areLightsOn;
+      const baseSpeed = 0.8,
+        nitroSpeed = 1.5,
+        turnSpeed = 3.5;
       const speed = keysPressed.current.shift ? nitroSpeed : baseSpeed;
 
       if (keysPressed.current.a) angle -= turnSpeed;
@@ -214,7 +194,6 @@ const Room = ({ roomId }: { roomId: string }) => {
     const url = new URL(window.location.href);
     url.searchParams.delete("host");
     navigator.clipboard.writeText(url.toString());
-
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -223,9 +202,7 @@ const Room = ({ roomId }: { roomId: string }) => {
     if (!roomId) return;
     navigator.clipboard.writeText(roomId);
     setIsRoomIdCopied(true);
-    setTimeout(() => {
-      setIsRoomIdCopied(false);
-    }, 2000);
+    setTimeout(() => setIsRoomIdCopied(false), 2000);
   };
 
   return (
@@ -247,7 +224,6 @@ const Room = ({ roomId }: { roomId: string }) => {
           src="/sounds/car-horn.mp3"
           preload="auto"
         ></audio>
-
         <div className="absolute inset-0 bg-grid-zinc-700/[0.2]" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent" />
 
@@ -298,18 +274,17 @@ const Room = ({ roomId }: { roomId: string }) => {
         </div>
 
         <div className="absolute bottom-6 right-6 flex items-center gap-3 md:bottom-8 md:right-8">
-          <div className="flex items-center gap-2 rounded-md bg-zinc-800/80 px-3 h-8.5 text-sm backdrop-blur-sm">
+          <div className="flex items-center gap-2 rounded-md bg-zinc-800/80 px-3 py-1.5 text-sm backdrop-blur-sm">
             <Users size={16} />
             <span>{peerIds.length + 1}</span>
           </div>
           <div
-            className={`rounded-md px-3 h-8.5 flex items-center text-sm font-semibold backdrop-blur-sm ${
+            className={`rounded-md px-3 py-1.5 text-sm font-semibold backdrop-blur-sm ${
               isHost ? "bg-zinc-100 text-zinc-900" : "bg-zinc-800/80"
             }`}
           >
             {isHost ? "HOST" : "VIEWER"}
           </div>
-
           <Tooltip>
             <TooltipTrigger asChild>
               <Button size="icon" variant="secondary" onClick={handleShare}>
@@ -320,7 +295,6 @@ const Room = ({ roomId }: { roomId: string }) => {
               <p>{copied ? "Link Copied!" : "Share Invite Link"}</p>
             </TooltipContent>
           </Tooltip>
-
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

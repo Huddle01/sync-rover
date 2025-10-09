@@ -23,14 +23,17 @@ export const createRoomId = async (): Promise<string> => {
   return roomId;
 };
 
-export const getAccessToken = async (
-  roomId: string,
-  isGuest?: boolean
-): Promise<string> => {
+export const getAccessToken = async ({
+  isHost,
+  roomId,
+}: {
+  isHost: boolean;
+  roomId: string;
+}): Promise<string> => {
   const accessToken = new AccessToken({
     apiKey: process.env.API_KEY!,
     roomId: roomId as string,
-    role: isGuest ? Role.GUEST : Role.HOST,
+    role: isHost ? Role.HOST : Role.GUEST,
     permissions: {
       admin: true,
       canConsume: true,
